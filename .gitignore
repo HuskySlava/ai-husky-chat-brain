@@ -1,0 +1,25 @@
+# Node.js
+node_modules/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*.local
+a
+# Compiled files
+dist/
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Others
+*.swp
+*.bak
+*.tmp
