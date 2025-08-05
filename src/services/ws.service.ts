@@ -1,6 +1,7 @@
 import {WebSocket, WebSocketServer} from "ws";
 import {Server} from "http";
 import { v4 as uuidv4 } from 'uuid';
+import AiService, {AIModels} from "./ai.service";
 
 type UUID = string;
 
@@ -51,11 +52,14 @@ export default class WebSocketService {
     private static instance: WebSocketService;
     private wss: WebSocketServer;
     private wsUserList: WsUserList;
+    private aiService: AiService;
 
     private constructor(server: Server) {
         this.wss = new WebSocketServer({ server: server });
         this.wsUserList = {};
         this.init();
+        this.aiService = AiService.getInstance();
+        AiService.initialize();
     }
 
     public static getInstance(server: Server): WebSocketService {
@@ -93,10 +97,57 @@ export default class WebSocketService {
                 isNew,
             }));
 
+            ws.send(JSON.stringify({
+                id: uuidv4(),
+                type: "incoming",
+                text: "Hello!, Let's discuss \"5th edition of Cardiac Surgery in the Adult\"",
+                timestamp: Date.now()
+            }))
+
             ws.on("close", () => {
                 user.isActive = false;
                 user.ws = undefined;
             });
+
+            ws.on("message", (message) => {
+                try {
+                    const raw = message.toString();
+                    const msg = JSON.parse(raw);
+
+                    if (typeof msg !== 'object' || msg === null || !msg.type) {
+                        throw new Error('Invalid message format: missing "type"');
+                    }
+
+                    if(msg.type === "outgoing") {
+
+                        // Echo message
+                        ws.send(JSON.stringify({
+                            id: msg.id,
+                            type: msg.type,
+                            text: msg.text,
+                            timestamp: msg.timestamp
+                        }))
+
+                        this.aiService.queryAi(msg.text, AIModels.LLAMA3).then(res => {
+                            ws.send(JSON.stringify({
+                                id: uuidv4(),
+                                type: 'incoming',
+                                text: res,
+                                timestamp: Date.now()
+                            }))
+                        })
+                    }
+
+
+                } catch (err) {
+                    console.error('Invalid message:', err);
+                    ws.send(JSON.stringify({
+                        type: 'error',
+                        message: 'Invalid message format',
+                    }));
+                }
+            })
+
         });
 
         this.wss.on('error', (error: Error) => {
@@ -104,7 +155,7 @@ export default class WebSocketService {
         });
 
         this.heartBeat();
-        this.simulateMessages();
+        // this.simulateMessages();
     }
 
     createWsUser(displayName: string): WsUser {
